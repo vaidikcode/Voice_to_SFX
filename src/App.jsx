@@ -1,11 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 
-// In production, we use an empty string so the browser assumes the current domain
-// In development (localhost), we point to port 8000
-const API_URL = import.meta.env.MODE === 'production' 
-  ? '' 
-  : 'http://localhost:8000';
+const API_URL = import.meta.env.MODE === 'production' ? '' : 'http://localhost:8000'
 
 function App() {
   const [projectName, setProjectName] = useState('')
@@ -17,7 +13,8 @@ function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [recordedBlob, setRecordedBlob] = useState(null)
-  
+  const [activeTab, setActiveTab] = useState('record')
+
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
   const timerRef = useRef(null)
@@ -26,7 +23,9 @@ function App() {
     const file = e.target.files[0]
     if (file && file.type.startsWith('audio/')) {
       setAudioFile(file)
+      setRecordedBlob(null)
       setError(null)
+      setActiveTab('upload')
     } else {
       setError('Please select a valid audio file')
     }
@@ -49,6 +48,7 @@ function App() {
       setAudioFile(file)
       setRecordedBlob(null)
       setError(null)
+      setActiveTab('upload')
     } else {
       setError('Please drop a valid audio file')
     }
@@ -79,12 +79,13 @@ function App() {
       setIsRecording(true)
       setRecordingTime(0)
       setError(null)
+      setActiveTab('record')
 
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1)
       }, 1000)
     } catch (err) {
-      setError('Could not access microphone. Please check permissions.')
+      setError('Microphone access denied. Check permissions.')
     }
   }
 
@@ -98,17 +99,14 @@ function App() {
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-      }
+      if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
     if (!projectName || !audioFile) {
-      setError('Please provide both project name and audio file')
+      setError('Add a project name and audio source')
       return
     }
 
@@ -122,169 +120,132 @@ function App() {
 
     try {
       const response = await axios.post(`${API_URL}/api/voice_to_sfx`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       })
-      
       setResults(response.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to process audio. Please try again.')
+      setError(err.response?.data?.detail || 'Failed to process audio.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="waveform-icon">🎙️</div>
-        <h1>VOICE TO SFX</h1>
-        <p>AI-Powered Sound Effect Generation</p>
+    <div className="site">
+      <nav className="nav">
+        <div className="brand">
+          <span className="logo">🔊</span>
+          <span className="brand-text">Voice to SFX</span>
+        </div>
+        <div className="nav-actions">
+          <a className="nav-link" href="/api/docs" target="_blank" rel="noreferrer">API Docs</a>
+        </div>
+      </nav>
+
+      <header className="hero">
+        <h1 className="hero-title">Turn your voice into cinematic SFX</h1>
+        <p className="hero-sub">Record a quick vocal sketch or upload audio — we’ll analyze it and generate polished sound effects with AI.</p>
+        <div className="hero-hint">No plugins. No DAW. Just magic.</div>
       </header>
 
-      <form onSubmit={handleSubmit}>
-        <div 
-          className={`upload-section ${dragging ? 'dragging' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {/* Project Name */}
-          <div className="input-group">
-            <label htmlFor="project">PROJECT NAME</label>
-            <input
-              type="text"
-              id="project"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="laser_shot_v1"
-            />
+      <section className="panel">
+        <form onSubmit={handleSubmit}>
+          <div className="panel-top">
+            <div className="tabs">
+              <button type="button" className={`tab ${activeTab === 'record' ? 'active' : ''}`} onClick={() => setActiveTab('record')}>Record</button>
+              <button type="button" className={`tab ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>Upload</button>
+            </div>
+
+            <div className="project-input">
+              <label htmlFor="project">Project name</label>
+              <input id="project" type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="laser_shot_v1" />
+            </div>
           </div>
 
-          <div className="divider"></div>
-
-          {/* Recording Section */}
-          <div className="input-group">
-            <label>RECORD YOUR VOICE</label>
-            <div className="record-controls">
-              {!isRecording ? (
-                <button 
-                  type="button" 
-                  className="record-button"
-                  onClick={startRecording}
-                >
-                  <span className="icon">⬤</span>
-                  <span>START RECORDING</span>
-                </button>
-              ) : (
-                <>
-                  <button 
-                    type="button" 
-                    className="record-button recording"
-                    onClick={stopRecording}
-                  >
-                    <span className="icon">⬛</span>
-                    <span>STOP</span>
-                  </button>
-                  <div className="recording-time">
-                    {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
-                  </div>
-                </>
+          {activeTab === 'record' ? (
+            <div className="record-card">
+              <div className="record-ui">
+                {!isRecording ? (
+                  <button type="button" className="btn record" onClick={startRecording}><span className="dot"/> Start recording</button>
+                ) : (
+                  <button type="button" className="btn stop" onClick={stopRecording}><span className="square"/> Stop</button>
+                )}
+                <div className="timer">{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</div>
+              </div>
+              {recordedBlob && !isRecording && (
+                <div className="toast success">Saved recording ({recordingTime}s)</div>
               )}
             </div>
-            
-            {recordedBlob && !isRecording && (
-              <div className="success-msg">
-                ✓ Recording saved ({recordingTime}s)
+          ) : (
+            <div className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+              <input className="file" type="file" accept="audio/*" onChange={handleFileChange} />
+              <div className="drop-content">
+                <div className="drop-icon">📁</div>
+                <div className="drop-text">Drag and drop audio here or browse</div>
+                {audioFile && (
+                  <div className="toast success">{audioFile.name}</div>
+                )}
               </div>
-            )}
-          </div>
-
-          <div className="or-divider">OR</div>
-
-          {/* Upload Section */}
-          <div className="input-group">
-            <label>UPLOAD AUDIO FILE</label>
-            <div className="file-input-wrapper">
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleFileChange}
-              />
-              <button type="button" className="file-button">
-                <span className="icon">📁</span>
-                <span>{audioFile && !recordedBlob ? 'CHANGE FILE' : 'BROWSE FILES'}</span>
-              </button>
             </div>
-            
-            {audioFile && !recordedBlob && (
-              <div className="success-msg">
-                ✓ {audioFile.name}
-              </div>
-            )}
-          </div>
+          )}
 
-          <button 
-            type="submit" 
-            className="submit-button"
-            disabled={loading || !projectName || !audioFile}
-          >
-            {loading ? (
-              <>
-                <span className="spinner-small"></span>
-                <span>PROCESSING</span>
-              </>
-            ) : (
-              <>
-                <span className="icon">⚡</span>
-                <span>GENERATE SFX</span>
-              </>
-            )}
+          <button type="submit" className="btn primary" disabled={loading || !projectName || !audioFile}>
+            {loading ? <span className="spinner"/> : <span className="bolt">⚡</span>}
+            {loading ? 'Generating SFX…' : 'Generate SFX'}
           </button>
-        </div>
-      </form>
+        </form>
+      </section>
 
       {loading && (
-        <div className="loading">
-          <div className="spinner"></div>
-          <p>Analyzing audio and generating professional sound effects...</p>
-        </div>
+        <section className="status">
+          <div className="progress">
+            <span style={{'--d': '0s'}}></span>
+            <span style={{'--d': '.1s'}}></span>
+            <span style={{'--d': '.2s'}}></span>
+            <span style={{'--d': '.3s'}}></span>
+          </div>
+          <p>Analyzing your audio and crafting variations…</p>
+        </section>
       )}
 
       {error && (
-        <div className="error">
-          <strong>ERROR:</strong> {error}
-        </div>
+        <section className="status error">
+          <p>{error}</p>
+        </section>
       )}
 
       {results && (
-        <div className="results-section">
-          <div className="interpretation">
-            <h3>AI INTERPRETATION</h3>
-            <div className="name">{results.interpretation.suggested_name}</div>
-            <div className="prompt">{results.interpretation.prompt}</div>
+        <section className="results">
+          <div className="card interp">
+            <div className="card-header">
+              <h3>Interpretation</h3>
+            </div>
+            <div className="interp-name">{results.interpretation?.suggested_name}</div>
+            <div className="interp-prompt">{results.interpretation?.prompt}</div>
           </div>
 
-          <div className="variations">
-            <h3>GENERATED VARIATIONS</h3>
+          <div className="grid">
             {results.assets && results.assets.length > 0 ? (
-              results.assets.map((url, index) => (
-                <div key={index} className="audio-player">
-                  <div className="variation-label">VAR {index + 1}</div>
-                  <audio controls src={url}>
-                    Your browser does not support audio.
-                  </audio>
+              results.assets.map((url, i) => (
+                <div key={i} className="card audio">
+                  <div className="card-header">
+                    <span className="pill">VAR {i + 1}</span>
+                  </div>
+                  <audio controls src={url} />
                 </div>
               ))
             ) : (
-              <div className="no-results">
-                No variations generated. Please try again.
+              <div className="card">
+                <div className="card-body">No variations generated. Try another take.</div>
               </div>
             )}
           </div>
-        </div>
+        </section>
       )}
+
+      <footer className="footer">
+        <div className="foot-text">Made with AI · Voice → SFX</div>
+      </footer>
     </div>
   )
 }
